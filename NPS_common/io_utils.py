@@ -20,12 +20,24 @@ def temp_txt_file(data):
         os.unlink(temp.name)
 
 
-def save_traj(fname, traj_arrs, symbols=None):
+def save_traj(fname, traj_arrs, symbols=None, CoM=False):
+    if not isinstance(symbols, (list, tuple)):
+        symbols = [symbols] * len(traj_arrs)
+    if False:# isinstance(traj_arrs[0][0], (int, float)):
+        import torch
+        traj_arrs = torch.split(torch.tensor(traj_arrs), [len(s) for s in symbols])
+    if CoM:
+        traj_arrs = [f - torch.mean(f, 0, keepdim=True) for f in traj_arrs]
+    from NPS_common.periodic_table import symbol_from_Z
+    try:
+        symbols = [symbol_from_Z(s) for s in symbols]
+    except:
+        pass
     if fname.endswith('.xyz'):
         from ase import Atoms
         from ase.io.xyz import write_xyz
         with open(fname, 'w') as fh:
-            write_xyz(fh, [Atoms(symbols, positions=arr) for arr in traj_arrs])
+            write_xyz(fh, [Atoms(symbol, positions=arr) for arr, symbol in zip(traj_arrs, symbols)])
 
 
 from collections import namedtuple
@@ -35,6 +47,9 @@ def read_traj(f):
     if f.endswith('.pdb'):
         import MDAnalysis
         return MDAnalysis.coordinates.PDB.PDBReader(f).trajectory
+    elif f.endswith(('.pdb', '.xyz', '.extxyz', '.cif')):
+        import ase.io
+        return ase.io.read(f, index=':')
     elif ('.lammpstraj' in f) or ('.lammpstrj' in f):
         from ase.io.lammpsrun import read_lammps_dump
         return read_lammps_dump(f, index=slice(0,None))
@@ -93,3 +108,10 @@ def read_topol(f):
     return g
 
 
+
+def load_nequip_dataset(fname, pbc=False):
+    import ase
+    ds = np.load(fname)
+    if not pbc:
+        return [ase.Atoms(#ds['name'], 
+        positions=pos, symbols=None, numbers=ds['z'], pbc=False, cell=[0,0,0]) for pos in ds['R']]

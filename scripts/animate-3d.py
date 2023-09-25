@@ -5,77 +5,86 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 # from mpl_toolkits.mplot3d import Axes3D
 # from skimage import measure 
-import argparse
+# import argparse
 from NPS_common.utils import load_array, str2slice
+from NPS_common.animateND import parse_cmd, process_parser, setup_plots, run_animation
 
-DIM=3
-parser = argparse.ArgumentParser()
-parser.add_argument("--type", default='slice2d', help="iso or slice or all or slice2d or hist or hist_map")
+# parser = argparse.ArgumentParser()
+parser = parse_cmd()
+parser.add_argument("--type", default='slice2d', help="slice2d | slice | iso | all | hist | hist_map")
 parser.add_argument("--iso_val", type=float, default=0.5, help="isosurface value")
 parser.add_argument("--index2d", default='z=0', help="which 2d slice, e.g. z=0 slice. Comma separates multiple values, e.g. animate-3d.py a.npy a.npy --index2d 'z=0,x=50'")
 parser.add_argument("--size", type=int, default=32, help="array size of flat .bin")
-parser.add_argument("--tskip", type=int, default=1, help="time skip")
-parser.add_argument("--range", default='', help="set to override automatic range, e.g. when it explodes")
-parser.add_argument("--ichannel", "-c", default='0', help="which channel to show, default 0 (single channel), 0:2 or 1:4 RGB multi-channel")
-parser.add_argument("--channel_index", type=int, default=-1, help="channel position, -1 for channel last (default) (-999 means no channel)")
-parser.add_argument("--delay", type=int, default=25, help="Delay between frames")
-parser.add_argument("-o", default='', help="save as gif")
-parser.add_argument("data", help="data file(s) (.npy or .npz)", nargs='+')
+parser.add_argument("--nbins", type=int, default=64, help="no. bins for histogram (type=hist)")
 options = parser.parse_args()
+options.DIM = 3
+options, data = process_parser(options)
+(allmin, allmax) = options.range[:2]
+nframe = len(data[0])
+nplot = len(options.data)
+nrow = options.nrow
+ncol = int(np.ceil(nplot/nrow))
+if options.type in ('slice', 'iso'):
+    for i in range(len(data)):
+        if len(data[i].shape) == 5:
+            assert data[i].shape[-1] == 1
+            data[i] = data[i][..., 0]
 
-nplot= len(options.data)
 options.index2d = list(filter(bool, options.index2d.split(',')))
 if len(options.index2d) == 1: options.index2d *= nplot
 options.index2d= [[x.split('=')[0], int(x.split('=')[1])] for x in options.index2d]
-options.ichannel = list(map(str2slice, filter(bool, options.ichannel.split(','))))
-if len(options.ichannel) == 1: options.ichannel *= nplot
-fig = plt.figure(figsize=plt.figaspect(1/nplot))
+# options.ichannel = list(map(str2slice, filter(bool, options.ichannel.split(','))))
+# if len(options.ichannel) == 1: options.ichannel *= nplot
+fig = plt.figure(figsize=plt.figaspect(nrow/ncol))
 if options.type in ('slice2d', 'hist', 'hist_map'):
-    axs=[fig.add_subplot(1, nplot, i+1) for i in range(nplot)]
+    axs=[fig.add_subplot(nrow, ncol, i+1) for i in range(nplot)]
 else:
     from mpl_toolkits.mplot3d import Axes3D
-    axs=[fig.add_subplot(1, nplot, i+1, projection='3d') for i in range(nplot)]
-assert options.type == 'slice2d' or all([isinstance(x, int) for x in options.ichannel]), ValueError(f'Color output with slicing only available in the slice2d mode')
+    axs=[fig.add_subplot(nrow, ncol, i+1, projection='3d') for i in range(nplot)]
+    for ax in axs:
+        ax.view_init(azim=30)
+# assert options.type == 'slice2d' or all([isinstance(x, int) for x in options.ichannel]), ValueError(f'Color output with slicing only available in the slice2d mode')
+# fig, axs = setup_plots(options)
 
-data=[]
-dat_minmax = []
-for i in range(nplot):
-    data.append(load_array(options.data[i]).astype('float32'))
-    if options.channel_index == -999:
-        data[i] = data[i][...,None]
-    elif options.channel_index == -1:
-        pass
-    elif options.channel_index >= 0:
-        new_ax = list(range(0,options.channel_index))+list(range(options.channel_index+1,data[i].ndim))+[options.channel_index]
-        data[i] = np.transpose(data[i], new_ax)
-    else:
-        raise f"Unknown channel_index {options.channel_index}"
-    data[i] = data[i].reshape((-1,)+data[i].shape[-DIM-1:])
-    data[i] = data[i][::options.tskip, ..., options.ichannel[i]]
-    if np.any(np.isnan(data[i])):
-        print("WARNING NAN encountered")
-        np.nan_to_num(data[i], False)
-    print(options.data[i], 'value range', np.min(data[i]), np.max(data[i]))
-    if options.type not in ('slice2d', 'hist', 'hist_map'):
-        axs[i].set_xlim((0, data[i].shape[1]))
-        axs[i].set_ylim((0, data[i].shape[2]))
-        axs[i].set_zlim((0, data[i].shape[3]))
-        axs[i].view_init(25, 65)
-    dat_minmax.append([np.min(data[i]), np.max(data[i])])
-#data = np.array(data)
-dat_minmax=np.array(dat_minmax)
-if options.range:
-    allmin = float(options.range.split(',')[0])
-    allmax = float(options.range.split(',')[1])
-else:
-    allmin=np.min(dat_minmax[:,0])
-    allmax=np.max(dat_minmax[:,1])
-print('Overall min max', allmin, allmax)
-nframe = len(data[0])
-for i in range(nplot):
-    if data[i].shape[-1] == 3:
-        print(f'3 color channels in data {i}, normalizing for color display')
-        data[i] = (data[i]-allmin)/(allmax-allmin)
+# data=[]
+# dat_minmax = []
+# for i in range(nplot):
+#     data.append(load_array(options.data[i]).astype('float32'))
+#     if options.channel_index == -999:
+#         data[i] = data[i][...,None]
+#     elif options.channel_index == -1:
+#         pass
+#     elif options.channel_index >= 0:
+#         new_ax = list(range(0,options.channel_index))+list(range(options.channel_index+1,data[i].ndim))+[options.channel_index]
+#         data[i] = np.transpose(data[i], new_ax)
+#     else:
+#         raise f"Unknown channel_index {options.channel_index}"
+#     data[i] = data[i].reshape((-1,)+data[i].shape[-DIM-1:])
+#     data[i] = data[i][::options.tskip, ..., options.ichannel[i]]
+#     if np.any(np.isnan(data[i])):
+#         print("WARNING NAN encountered")
+#         np.nan_to_num(data[i], False)
+#     print(options.data[i], 'value range', np.min(data[i]), np.max(data[i]))
+#     if options.type not in ('slice2d', 'hist', 'hist_map'):
+#         axs[i].set_xlim((0, data[i].shape[1]))
+#         axs[i].set_ylim((0, data[i].shape[2]))
+#         axs[i].set_zlim((0, data[i].shape[3]))
+#         axs[i].view_init(25, 65)
+#     dat_minmax.append([np.min(data[i]), np.max(data[i])])
+# #data = np.array(data)
+# dat_minmax=np.array(dat_minmax)
+# if options.range:
+#     allmin = float(options.range.split(',')[0])
+#     allmax = float(options.range.split(',')[1])
+# else:
+#     allmin=np.min(dat_minmax[:,0])
+#     allmax=np.max(dat_minmax[:,1])
+# print('Overall min max', allmin, allmax)
+# nframe = len(data[0])
+# for i in range(nplot):
+#     if data[i].shape[-1] == 3:
+#         print(f'3 color channels in data {i}, normalizing for color display')
+#         data[i] = (data[i]-allmin)/(allmax-allmin)
 
 def plot_3D_slice(array, ax):
     pic = []
@@ -133,7 +142,7 @@ if options.type == 'slice':
 elif options.type == 'iso':
     plotfunc=lambda t: [plot_3D_iso(data[i][t], axs[i]) for i in range(nplot)]
 elif options.type == 'hist' or options.type == 'hist_map':
-    bins=np.linspace(allmin-0.001,allmax+0.0001,30)
+    bins=np.linspace(allmin-0.001, allmax+0.0001, options.nbins)
     _hist=lambda t: [np.histogram(data[i][t].ravel(), bins=bins)[0] for i in range(nplot)]
     plots_last = _hist(-1)
     plots_first = _hist(0)

@@ -52,9 +52,12 @@ class slice_operator:
 from e3nn import o3
 def _rand_rotate_o3(g):
     rot = o3.rand_matrix()
-    for attr in ('pos', 'velocities'):
-        if hasattr(g, attr):
+    for attr in ('pos', 'velocities', "positions", "forces", "cell", "edge_vec_correction"):
+        # if hasattr(g, attr):
+        try:
             g[attr] = g[attr] @ rot.T
+        except:
+            pass
     return g
 
 class data_augment_operator:

@@ -88,3 +88,14 @@ def broadcast_to_batch(x: torch.Tensor, ptr):
         return x
     return x.repeat_interleave(ptr[1:]-ptr[:-1], dim=0)
 
+
+# https://stackoverflow.com/questions/55918468/convert-integer-to-pytorch-tensor-of-binary-bits
+def dec2bin(x, bits):
+    # mask = 2 ** torch.arange(bits).to(x.device, x.dtype)
+    mask = 2 ** torch.arange(bits - 1, -1, -1).to(x.device, x.dtype)
+    return x.unsqueeze(-1).bitwise_and(mask).ne(0).byte()
+
+def bin2dec(b, bits):
+    mask = 2 ** torch.arange(bits - 1, -1, -1).to(b.device, b.dtype)
+    return torch.sum(mask * b, -1)
+

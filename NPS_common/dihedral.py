@@ -7,34 +7,39 @@ def _dihedral(pos, pt=True):
     if pt:
         norm = torch.linalg.norm
         cross = torch.cross
+        atan2 = torch.atan2
         # det = torch.linalg.det
         # sign = torch.sign
         if isinstance(vecs, np.ndarray): vecs = torch.from_numpy(vecs)
         vecs = vecs.double()
         # sgn = torch.sign(torch.linalg.det(vecs))
-        sgn = (torch.linalg.det(vecs) >=0).int()*2-1
+        # sgn = (torch.linalg.det(vecs) >=0).int()*2-1
+        v123 = torch.linalg.det(vecs)
     else:
         norm = np.linalg.norm
         cross = np.cross
+        atan2 = np.atan2
+        v123 = np.linalg.det(vecs)
         # det = np.linalg.det
         # sign = np.sign
-        sgn = np.sign(np.linalg.det(vecs))
-    bond_len = norm(vecs, 2, 1, True)
-    # print('bond len std/mean',np.std(bond_len), np.mean(bond_len));
-    vecs = vecs/bond_len
+        # sgn = np.sign(np.linalg.det(vecs))
+    # bond_len = norm(vecs, 2, 1, True)
+    # # print('bond len std/mean',np.std(bond_len), np.mean(bond_len));
+    # vecs = vecs/bond_len
     m = cross(vecs[:,0],vecs[:,1], -1);
     n = cross(vecs[:,1],vecs[:,2], -1);
     # angle123 = np.pi - np.arcsin(np.linalg.norm(m,axis=-1));
     # angle234 = np.pi - np.arcsin(np.linalg.norm(n,axis=-1));
     # print('123 bond angle', np.std(angle123), np.mean(angle123)); 
     # print('234 bond angle', np.std(angle234), np.mean(angle234)); 
-    m= m/norm(m, 2, 1, True)
-    n= n/norm(n, 2, 1, True)
-    if pt:
-        di = torch.arccos(torch.clip(torch.sum(m*n, 1), -1,1))
-    else:
-        di = np.arccos(np.clip(np.sum(m*n, 1), -1,1))
-    di = di*(1+sgn)/2 + (2*np.pi-di)*(1-sgn)/2
+    # m= m/norm(m, 2, 1, True)
+    # n= n/norm(n, 2, 1, True)
+    # if pt:
+    #     di = torch.atan2(torch.clip(torch.sum(m*n, 1), -1,1))
+    # else:
+    #     di = np.atan2(np.clip(np.sum(m*n, 1), -1,1))
+    # di = di*(1+sgn)/2 + (2*np.pi-di)*(1-sgn)/2
+    di = atan2(norm(vecs[:,1], 2, 1)*v123, torch.sum(m*n, 1))
     return di
     # print('dihedral angle', np.std(di), np.mean(di)); 
     # import matplotlib.pyplot as plt; 

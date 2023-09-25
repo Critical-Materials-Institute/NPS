@@ -209,6 +209,12 @@ def make_scheduler(args, my_optimizer):
         scheduler = lrs.ReduceLROnPlateau(my_optimizer,
             mode='min', patience=args.lr_decay_patience, min_lr=args.lr_min,
             factor=args.lr_decay_factor,verbose=True)
+    elif sch == 'onecycle':
+        scheduler = lrs.OneCycleLR(my_optimizer, max_lr=args.lr, 
+          final_div_factor=int(args.lr/args.lr_min), total_steps=args.lr_decay_step)
+    elif sch == 'cosine':
+        scheduler = lrs.CosineAnnealingLR(my_optimizer, args.lr_decay_step,
+          eta_min=args.lr_min, verbose=True)
     elif sch.find('step') >= 0:
         raise 'ERROR not implemented'
         milestones = args.decay_type.split('_')

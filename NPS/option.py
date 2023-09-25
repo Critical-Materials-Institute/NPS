@@ -8,7 +8,10 @@ parser = argparse.ArgumentParser(description='NPS')
 post_processors = []
 for x in sys.argv[1:]:
     if x.startswith(('--register_args=', '--model=', '--datatype=', '--dataset=', '--core=')):
-        x = ('NPS.data.' if x.startswith('--data') else '') + re.sub(r'^--\w*=', '', x)
+        x = ('NPS.data.' if x.startswith('--data') else ('NPS.model.' if (x.startswith('--model') and (not '.' in x)) else '')) + re.sub(r'^--\w*=', '', x)
+        if "--debug" in sys.argv: module = import_module(x)
+        if not x:
+            continue
         try:
             module = import_module(x)
         except:
@@ -26,9 +29,10 @@ for x in sys.argv[1:]:
 
 #################### Book-keeping/misc ####################
 parser.add_argument('--register_args', type=str, nargs='*', help='Module registering specific args with "def register_args(parser)" and "def post_process_args(args)"')
+parser.add_argument('--project', type=str, default='scratch', help='job id')
 parser.add_argument('--jobid', type=str, default='jobid', help='job id')
 parser.add_argument('--dir', type=str, default='', help='job directory')
-parser.add_argument('--mode', type=str, default='train', choices=('train', 'eval', 'valid', 'predict', 'rollout', 'trace'),help='job type: train; eval|valid; predict|rollout')
+parser.add_argument('--mode', type=str, default='train', choices=('train', 'eval', 'valid', 'predict', 'rollout', 'trace', 'export_model'),help='job type: train; eval|valid; predict|rollout')
 # parser.add_argument('--template', default='.',
 #                     help='You can set various templates in option.py')
 parser.add_argument('--seed', type=int, default=54321, help='Rand seed')
@@ -40,8 +44,8 @@ parser.add_argument('--cpu', action='store_true', help='use cpu only')
 parser.add_argument('--n_GPUs', type=int, default=1, help='number of GPUs')
 
 #################### Logging ####################
-parser.add_argument('--save', type=str, default='test',
-                    help='file name to save')
+# parser.add_argument('--save', type=str, default='test',
+#                     help='file name to save')
 # parser.add_argument('--load', type=str, default='.',
 #                     help='file name to load')
 parser.add_argument('--resume', type=str, default="", help='Load saved model from latest(default in training mode)|best(default in valid mode)|ema|pre(from --pre_train)')
@@ -64,11 +68,12 @@ parser.add_argument('--data_valid', '--file_test', type=str, default=None, help=
 parser.add_argument('--data_predict', '--file_predict', type=str, default=None, help='predict dataset. Empty to default to DATA/test.npy')
 parser.add_argument('--test_set', type=str, default='', choices=('', 'valid', 'predict'), help='Dataset for test, i.e. valid or predict.')
 parser.add_argument('--datatype', '--dataset', type=str, default='longclip', help='data type')
+parser.add_argument('--data_is_time_series', type=int, default=1, help='data is time series')
 parser.add_argument('--datatype_valid', type=str, default='', help='validation dataset type. Defaults to --datatype')
 parser.add_argument('--datatype_predict', type=str, default='', help='prediction dataset type. Defaults to --datatype')
 parser.add_argument('--dim', type=int, default=2, help='dimension (default 2d image, or 3d simulation')
 parser.add_argument('--periodic', action='store_true', default=False, help='NPS periodic boundary condition')
-parser.add_argument('--frame_shape', type=str, default='64', help='frame shape, e.g. 64,64')
+parser.add_argument('--frame_shape', type=str, default='', help='frame shape, e.g. 64,64')
 parser.add_argument('--nfeat_in', type=int, default=1, help='nfeat_in')
 parser.add_argument('--nfeat_out', type=int, default=-1, help='nfeat_out, default (-1) to nfeat_in')
 parser.add_argument('--nfeat_out_global', type=int, default=0, help='no. of global output channels per graph')
@@ -92,7 +97,9 @@ parser.add_argument('--channel_first', action='store_true', help='Transform a ch
 parser.add_argument('--data_setting', default='{}', help='Additional data settings, e.g. "{\'splitoffset\'=100}"')
 parser.add_argument('--batch', '--minibatch_size', type=int, default=4, help='batch size')
 parser.add_argument('--batch_valid', type=int, default=-1, help='batch size for validation')
-parser.add_argument('--batch_predict', type=int, default=1, help='batch size for prediction')
+parser.add_argument('--batch_predict', type=int, default=-1, help='batch size for prediction')
+parser.add_argument('--mean_std_in', default='', help='for each channel, the mean and std, e.g."0,1,100,200" sets mean to 0, 100 and normalize by 1, 200 for two input channels, respectively')
+parser.add_argument('--mean_std_out', default='')
 
 
 #################### Model ####################
@@ -134,19 +141,19 @@ parser.add_argument('--model_stoch', default='simple_diffusion', help='stochasti
 # Specifications for model_deter = feedforward
 parser.add_argument('--ff_model', default='resnet', help='Which feedforward model')
 parser.add_argument('--pre_train', type=str, default='', help='pre-trained model')
-parser.add_argument('--n_resblocks', type=int, default=20,
-                    help='number of residual blocks')
-# Specifications for model_stoch
-parser.add_argument('--stoch_hidden', default='10', help='number of features for stochasticity')
-parser.add_argument('--stoch_kernel', default='3', help='convolutional kernel size for stochasticity, e.g. 3 or 3,1,1 for each layer')
-parser.add_argument('--stoch_numNN', type=int, default=1, help='1 for nearest neighbor, 2 for 2-NN, etc')
-parser.add_argument('--stoch_act', type=str, default='relu', help='activation function for stochasticity')
-parser.add_argument('--stoch_onsite', default='0', help='comma separated flags for whether the channels contain onsite noise')
-parser.add_argument('--stoch_skiponsite', action='store_true', help='skip onsite noise altogether')
-parser.add_argument('--f1', type=float, default=1,
-                    help='float1 for debug')
-parser.add_argument('--s1', default='',
-                    help='string1 for debug')
+# parser.add_argument('--n_resblocks', type=int, default=20,
+#                     help='number of residual blocks')
+# # Specifications for model_stoch
+# parser.add_argument('--stoch_hidden', default='10', help='number of features for stochasticity')
+# parser.add_argument('--stoch_kernel', default='3', help='convolutional kernel size for stochasticity, e.g. 3 or 3,1,1 for each layer')
+# parser.add_argument('--stoch_numNN', type=int, default=1, help='1 for nearest neighbor, 2 for 2-NN, etc')
+# parser.add_argument('--stoch_act', type=str, default='relu', help='activation function for stochasticity')
+# parser.add_argument('--stoch_onsite', default='0', help='comma separated flags for whether the channels contain onsite noise')
+# parser.add_argument('--stoch_skiponsite', action='store_true', help='skip onsite noise altogether')
+# parser.add_argument('--f1', type=float, default=1,
+#                     help='float1 for debug')
+# parser.add_argument('--s1', default='',
+#                     help='string1 for debug')
 parser.add_argument('--precision', type=str, default='single',
                     choices=('single', 'half'),
                     help='FP precision for test (single | half)')
@@ -158,7 +165,7 @@ parser.add_argument('--trainer', default='trainer', help='Trainer module with "d
 parser.add_argument('--nepoch', '--epochs', type=int, default=8000000, help='nepoch')
 parser.add_argument('--epoch_size', type=int, default=-1, help='epoch size. -1=whole train set')
 parser.add_argument('--keep_ckpt', type=int, default=-1, help='number of checkpoints to keep. -1 to default(5)')
-parser.add_argument('--print_freq', '--print_every', type=int, default=20, help='how many batches to wait before logging training status')
+parser.add_argument('--print_freq', '--print_every', type=int, default=-5, help='how many batches to wait before logging training status. negative: total prints per epoch')
 parser.add_argument('--valid_freq', '--valid_every', type=int, default=1, help='Perform validation/checkpoint every this many epochs')
 parser.add_argument('--n_training_steps', type=int, default=int(10e6), help='No. of training steps')
 parser.add_argument('--data_aug', type=str, default='spg,noise', help='Data augmentation by pointgroup, cropping, noise, etc')
@@ -170,6 +177,8 @@ parser.add_argument('--noise', type=float, default=0.0, help='noise magnitude')
 parser.add_argument('--noise_op', type=str, default='', help="Example: 'add_uniform/0:1/1e-2', 'mul_uniform/1:2/1e-2', 'drop/1:6/0.3', 'add_normal/0:1/1e-3,mul_uniform/-2:9/1e-2' If empty, use add/normal and --option")
 parser.add_argument('--reset', action='store_true',
                     help='reset the training')
+parser.add_argument('--accelerate', action='store_true',
+                    help='use Accelerate to use multi gpu')
 # parser.add_argument('--split_batch', type=int, default=1,
 #                     help='split the batch into smaller chunks')
 # parser.add_argument('--self_ensemble', action='store_true',
@@ -221,7 +230,7 @@ parser.add_argument('--lr_decay_patience', type=int, default=4, help='Learning r
 # parser.add_argument('--gamma', type=float, default=0.5,
 #                     help='learning rate decay factor for step decay')
 ### Predict job
-parser.add_argument('--traj_out', type=str, default='', help='file to save test trajectories')
+parser.add_argument('--file_out', type=str, default='', help='file to save output file')
 parser.add_argument('--n_traj_out', '--n_rollout', type=int, default=-1, help='No. of rollout trajectories')
 parser.add_argument('--predict_only', action='store_true',
                     help='set this option to test the model without GT.')
@@ -236,7 +245,15 @@ parser.add_argument('--predict_only', action='store_true',
 # parser.add_argument('--testset', type=str, default='longclip',
 #                     help='dataset name for testing')
 
-#################### Training ####################
+#################### logging ####################
+parser.add_argument('--use_wandb', action='store_true',
+                    help='use wandb to log')
+parser.add_argument('--resume_wandb_log', action='store_true',
+                    help='resume logging in the same run')
+parser.add_argument('--wandb_args', type=str, nargs='*', help='choose which args to keep track of')
+parser.add_argument('--wandb_plt_freq', type=int, default=5, help='wandb plot frequency (epoch)') 
+
+#################### Exporting ####################
 parser.add_argument('--export_wrapper', type=str, default='', help='module for tracing & exporting model')
 parser.add_argument('--export_file', type=str, default='exported.pt', help='save file of exported (traced) model')
 
@@ -277,7 +294,7 @@ args.frame_shape = tuple(str2list(args.frame_shape))
 if len(args.frame_shape) == 1:
     args.frame_shape *= args.dim
 else:
-    assert len(args.frame_shape) == args.dim, ValueError('frame shape mismatch')
+    assert len(args.frame_shape) in (args.dim, 0), ValueError('frame shape mismatch')
 if args.nfeat_out == -1:
     args.nfeat_out = args.nfeat_in
 if args.n_in_valid == -1:
@@ -316,6 +333,8 @@ if args.ngram > 1: assert args.ngram <= args.n_in and args.ngram <= args.n_in_te
 if args.node_type:
     args.node_type = args.node_type.split(',')
     assert args.n_node_type == len(args.node_type)
+args.mean_std_in =  str2list(args.mean_std_in,  float)
+args.mean_std_out = str2list(args.mean_std_out, float)
 
 #################### Model ####################
 args.kernel_size = str2list(args.kernel_size)
@@ -331,6 +350,8 @@ args.RNN = bool(args.RNN)
 if (not args.noise_op) and (args.noise > 0):
     args.noise_op = f'add_normal/0:None/{args.noise}'
 args.loss_wt = str2list(args.loss_wt, float)
+if (args.print_freq < 0) and (args.epoch_size > 0):
+    args.print_freq = args.epoch_size//(-args.print_freq)
 
 #parser.add_argument('--data_range', type=str, default='1-800/801-810',
 #                    help='train/test data range')

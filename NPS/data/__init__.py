@@ -4,8 +4,8 @@ from importlib import import_module
 from sklearn.model_selection import train_test_split
 
 def load_data(args, typ, datf, num_workers=1, split='train'):
-    # print(f'debug args, typ, datf {args } {typ} {datf}')
-    if typ in ('longclip', 'graph_clip', 'biased_clip'):
+    # if typ in ('longclip', 'graph_clip', 'biased_clip', 'vartime_clip'):
+    if args.data_is_time_series:
         if split == 'train':
             n_in, n_out, clip_step = args.n_in, args.n_out, args.clip_step
         elif split == 'predict':
@@ -16,7 +16,7 @@ def load_data(args, typ, datf, num_workers=1, split='train'):
     # if typ == 'longclip':
     #     from NPS.data.longclip import longclip
         m = getattr(import_module('NPS.data.' + typ), typ)
-        ds = m(args, datf, n_in+n_out, clip_step, nskip=nskip)
+        ds = m(args, datf, n_in+n_out, clip_step, nskip=nskip, split=split)
         print(f'Loaded {typ} {datf} size {ds.flat.shape if hasattr(ds.flat, "shape") else len(ds.flat)} start_pos {ds.start_pos.shape} stat {ds.statistics}')
         assert ds.start_pos.size > 0
         return ds
@@ -25,7 +25,7 @@ def load_data(args, typ, datf, num_workers=1, split='train'):
     #     ds = graph_clip(args, datf, n_in+n_out, clip_step, nskip=nskip)
     #     print(f'Loaded graph_clip {datf} size {len(ds.flat)} start_pos {ds.start_pos.shape} stat {ds.statistics}')
     #     return ds
-    elif typ.startswith('hubbard1band'):
+    elif typ == 'hubbard1band':
         from NPS.data.hubbard1band import load_hubbard1band
         # print(f'debug data', args.data, load_hubbard1band(args.data, cache_data=args.cache))
         return load_hubbard1band(args.data, cache_data=args.cache, filter=args.datatype[12:])

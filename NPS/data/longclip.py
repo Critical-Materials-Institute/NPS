@@ -17,10 +17,11 @@ def post_process_args(args):
     #     args.data_predict += '.npy'
 
 class longclip:
-    def __init__(self, args, datf, tot_len, clip_step, nskip=1, **kwx):
+    def __init__(self, args, datf, tot_len, clip_step, nskip=1, split='train', **kwx):
         self.args = args
         self.dim = args.dim
         self.nskip = nskip
+        self.is_train_set = (split == 'train')
         self.tot_len = tot_len
         self.tot_len_frame = (self.tot_len-1)*self.nskip + 1
         data= self.load_data(datf)
@@ -44,15 +45,15 @@ class longclip:
             data = [d[f(d)] for d in data]
         if args.data_preprocess:
             data = [self.preprocess(args.data_preprocess, d) for d in data]
-        channel_first = True
         if data[0].ndim == self.dim+2:
             # no channel. Let's add a channel
             data = data[:,:,None] if not isinstance(data, list) else [d[:,:,None] for d in data]
-        if channel_first:
-            new_ord = list(range(data[0].ndim))
-            nch = new_ord.pop(-1)
-            new_ord.insert(len(new_ord)-self.dim, nch)
-            data = [d.transpose(new_ord) for d in data]
+        # channel_first = True
+        # if channel_first:
+        #     new_ord = list(range(data[0].ndim))
+        #     nch = new_ord.pop(-1)
+        #     new_ord.insert(len(new_ord)-self.dim, nch)
+        #     data = [d.transpose(new_ord) for d in data]
         if args.space_CG:
             raise NotImplementedError()
             data_cg = []
@@ -66,7 +67,8 @@ class longclip:
             shifts = np.array(np.meshgrid(*[np.arange(i) for i in ncg], indexing='ij')).reshape(self.dim,-1).T
             data= np.concatenate([np.mean(np.roll(data,shift,axis=tuple(range(3,3+self.dim))).reshape(shape_cg),axis=axis_mean) for shift in shifts])
         else:
-            assert np.array_equal(data[0].shape[3:], args.frame_shape), ValueError(f'mismatch {data[0].shape[3:]} {args.frame_shape}')
+            if len(args.frame_shape):
+                assert np.array_equal(data[0].shape[2:-1], args.frame_shape), ValueError(f'mismatch {data[0].shape[2:-1]} {args.frame_shape}')
         if args.time_CG > 1:
             raise NotImplementedError()
             data_cg = []
@@ -83,8 +85,10 @@ class longclip:
 
     def dataset_postprocess(self, args, data, **kwx):
         self.flat = np.concatenate(data)
-        if not args.channel_first:
-            self.flat = self.flat.transpose(0, *tuple(range(2,2+self.dim)), 1)
+        if args.mean_std_in:
+            self.flat = (self.flat - np.array(args.mean_std_in)[::2]) / np.array(args.mean_std_in)[1::2]
+        if args.channel_first:
+            self.flat = self.flat.transpose(0, 1+self.dim, *tuple(range(1,1+self.dim)))
         # self.flat = data.reshape((-1,)+data.shape[2:])
         # self.flat = np.stack([y for x in data for y in x])
         self.statistics = {}

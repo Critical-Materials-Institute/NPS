@@ -392,3 +392,17 @@ def diff_conv(dim, ker, nc, periodic=False):
     return ConvFixedKer(ker_wt, dim=dim, periodic=periodic, groups=nc)
 
 
+from functools import partial
+class InitialEmbedding(nn.Module):
+    def __init__(self, num_species, cutoff=3.2, num_basis=16):
+        super().__init__()
+        self.embed_node_x = nn.Embedding(num_species, 8)
+        self.embed_node_z = nn.Embedding(num_species, 8)
+        from graphite.nn.basis import bessel
+        self.embed_edge   = partial(bessel, start=0.0, end=cutoff, num_basis=num_basis)
+
+    def forward(self, data):
+        data.h_node_x = self.embed_node_x(data.x)
+        data.h_node_z = self.embed_node_z(data.x)
+        data.h_edge   = self.embed_edge(data.edge_attr.norm(dim=-1))
+        return data

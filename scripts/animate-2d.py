@@ -2,7 +2,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from NPS_common.animateND import parse_cmd, process_parser, run_animation
+from NPS_common.animateND import parse_cmd, process_parser, setup_plots, run_animation
 
 parser = parse_cmd()
 parser.add_argument("--interp", type=str, default='antialiased', help="Interpolation method: antialiased, nearest, etc")
@@ -10,11 +10,7 @@ options = parser.parse_args()
 options.DIM = 2
 options, data = process_parser(options)
 nplot = len(options.data)
-nrow = options.nrow
-ncol = int(np.ceil(nplot/nrow))
-fig, axs = plt.subplots(nrow, ncol, figsize=(ncol*4, nrow*4), squeeze=False,\
-    **({"gridspec_kw": {'wspace':float(options.spacing.split(',')[0]), 'hspace':float(options.spacing.split(',')[1])}} if options.spacing else {}))
-axs = axs.ravel()
+fig, axs = setup_plots(options)
 
 ims=[]
 for i in range(nplot):
@@ -22,8 +18,8 @@ for i in range(nplot):
     # note using global vmin, vmax
     ims.append(ax.imshow(data[i][0,:,:], cmap=plt.get_cmap(options.cmap), vmin=options.range[0], vmax=options.range[1], interpolation=options.interp))
 #        fig.colorbar(ims[i], ax=ax)
-    ax.set_xlim((0, data[i].shape[-2]))
-    ax.set_ylim((0, data[i].shape[-3]))
+    ax.set_xlim((0, data[i].shape[2]))
+    ax.set_ylim((0, data[i].shape[1]))
     if options.stamp: ax.set_title('0')
     if not options.axis: ax.set_axis_off()
 

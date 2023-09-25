@@ -11,9 +11,8 @@ def post_process_args(args):
     pass
 
 class biased_clip(longclip):
-    def __init__(self, args, datf, *x, **kwx):
-        self.is_train_set = (datf.endswith('train')) or (datf.endswith('train/')) or os.path.basename(datf).startswith('train')
-        super().__init__(args, datf, *x, **kwx)
+    # def __init__(self, args, datf, *x, **kwx):
+    #     super().__init__(args, datf, *x, **kwx)
 
     def dataset_postprocess(self, args, data, **kwx):
         super().dataset_postprocess(args, data, **kwx)

@@ -71,8 +71,14 @@ def load_array(fname, todense=True):
         # dense array
         dat = np.load(fname)
         return dat['arr_0']
-    elif fname[-4:]=='.txt':
+    elif fname[-4:].lower()=='.txt':
         return np.loadtxt(fname)
+    elif fname[-4:].lower()=='.csv':
+        import pandas
+        dat = pandas.read_csv(fname).to_numpy()
+        return pandas.to_numeric(dat.ravel(), errors='coerce').reshape(dat.shape)
+        # return pandas.read_csv(fname).to_numpy()
+        # return np.loadtxt(fname, delimiter=',')
     else:
         raise ValueError(f'Unknown format in {fname}')
 
@@ -134,4 +140,33 @@ def str2slice(s, range_only=False):
 def unique_list_str(list_str):
     import itertools
     return list(sorted(set(itertools.chain.from_iterable(list_str))))
+
+
+def batch_cov(points, var_axis=-1, sample_axis=-2):
+    assert var_axis==-1 and sample_axis==-2
+    ndim = points.ndim
+    mean = np.mean(points, axis=sample_axis, keepdims=True)
+    diffs = (points - mean).reshape(-1, points.shape[-2], points.shape[-1])
+    bcov = np.einsum('BNi,BNj ->Bij', diffs, diffs)
+    bcov = bcov / (points.shape[-2] - 1)  # Unbiased estimate
+    return bcov.reshape(*points.shape[:-2], points.shape[-1], points.shape[-1])
+
+
+def kde_plot_data(data, n_plot_pixel=200, plot_buffer=0.1, bw_method=None):
+    """"
+    data = [N_points, N_dim]
+    """
+    from scipy.stats import gaussian_kde
+    dim = data.shape[-1]
+    plot_pts = []
+    for id in range(dim):
+        xmin, xmax = data[..., id].min(), data[..., id].max()
+        buffer = (xmax-xmin)*plot_buffer
+        xmin, xmax = xmin - buffer, xmax + buffer
+        pts = np.linspace(xmin, xmax, n_plot_pixel)
+        plot_pts.append(pts)
+    plot_pts = np.stack(np.meshgrid(*plot_pts, indexing="ij"),-1)#.reshape(-1, dim)
+    plot_pts = np.transpose(plot_pts, [dim]+list(range(dim)))
+    kde = gaussian_kde(data.T, bw_method=bw_method)(plot_pts.reshape(dim, -1)).reshape(plot_pts.shape[1:])
+    return np.concatenate((plot_pts, kde[None, ...]), 0)
 
