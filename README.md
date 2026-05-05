@@ -1,6 +1,6 @@
 > [!CAUTION]
 > ## This repository is obsolete. 
-> ### Please visit the active repository [HERE]([URL_GOES_HERE](https://github.com/llnl/NPS)).
+> ### Please visit the active repository [HERE]([https://github.com/llnl/NPS]).
 
 # Neural Phase Simulation (NPS)
 NPS is a package of codes for simulating microstructure evolution and accelerated molecular dynamics with deep neural-networks based surrogate models. NPS is designed to offer quantitatively accurate and computationally efficient simulation capabilities by leveraging modern machine-learning techniques. The primary intended use cases of NPS are training neural network surrogate models, though performing simulations on a single node is also supported. 
